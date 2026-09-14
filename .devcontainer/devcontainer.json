@@ -1,0 +1,12 @@
+{
+  "name": "Python FastAPI",
+  "image": "mcr.microsoft.com/devcontainers/python:3",
+  "postCreateCommand": "pip install -r requirements.txt",
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": {
+      "label": "API Divergências",
+      "onAutoForward": "openBrowser"
+    }
+  }
+}
