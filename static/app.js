@@ -133,6 +133,18 @@ function resetarFormulario() {
     formTitle.textContent = "Registrar Nova Divergência";
     btnCancelar.classList.add('hidden');
 }
+
+window.exportarExcelFiltrado = function() {
+    const categoriaSelecionada = document.getElementById('filtro-categoria').value;
+    let url = '/api/exportar/excel';
+    
+    if (categoriaSelecionada) {
+        url += `?categoria=${categoriaSelecionada}`;
+    }
+    
+    window.location.href = url;
+}
+
 btnCancelar.addEventListener('click', resetarFormulario);
 
 carregarDivergencias();
