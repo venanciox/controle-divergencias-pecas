@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Float
 from database import Base
 
 class Divergencia(Base):
@@ -9,3 +9,4 @@ class Divergencia(Base):
     quantidade = Column(Integer, nullable=False)
     categoria = Column(String, nullable=False)
     subcategoria = Column(String, nullable=True)
+    valor_compra = Column(Float, nullable=True)

@@ -52,7 +52,7 @@ def exportar_excel(categoria: Optional[str] = None, db: Session = Depends(get_db
     if categoria:
         titulo_relatorio += f" - {categoria.upper()}"
 
-    ws.merge_cells('A1:E1')
+    ws.merge_cells('A1:F1')
     title_cell = ws['A1']
     title_cell.value = titulo_relatorio
     title_cell.font = Font(size=14, bold=True, color="FFFFFF")
@@ -60,7 +60,7 @@ def exportar_excel(categoria: Optional[str] = None, db: Session = Depends(get_db
     title_cell.fill = PatternFill(start_color="1A1A1A", end_color="1A1A1A", fill_type="solid")
     ws.row_dimensions[1].height = 30
 
-    headers = ["ID", "SKU (Part Number)", "Quantidade", "Categoria", "Subcategoria"]
+    headers = ["ID", "SKU (Part Number)", "Quantidade", "Categoria", "Subcategoria", "Valor Compra"]
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=2, column=col_num)
         cell.value = header
@@ -77,14 +77,17 @@ def exportar_excel(categoria: Optional[str] = None, db: Session = Depends(get_db
         ws.cell(row=row_num, column=3, value=d.quantidade).border = borda
         ws.cell(row=row_num, column=4, value=d.categoria).border = borda
         ws.cell(row=row_num, column=5, value=d.subcategoria or '-').border = borda
-        
+        valor_str = f"R$ {d.valor_compra:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if d.valor_compra else "-"
+        ws.cell(row=row_num, column=6, value=valor_str).border = borda
+
+        ws.cell(row=row_num, column=6).alignment = Alignment(horizontal="center", vertical="center")
         ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="center")
         ws.cell(row=row_num, column=3).alignment = Alignment(horizontal="center")
         ws.cell(row=row_num, column=4).alignment = Alignment(horizontal="center")
 
     ultima_linha = ws.max_row + 1 if divergencias else 3
     
-    ws.merge_cells(start_row=ultima_linha, start_column=1, end_row=ultima_linha, end_column=5)
+    ws.merge_cells(start_row=ultima_linha, start_column=1, end_row=ultima_linha, end_column=6)
     rodape_cell = ws.cell(row=ultima_linha, column=1)
     rodape_cell.value = f"Documento gerado em: {data_hora_br}"
     rodape_cell.font = Font(italic=True, size=10, color="555555")
@@ -96,6 +99,7 @@ def exportar_excel(categoria: Optional[str] = None, db: Session = Depends(get_db
     ws.column_dimensions['C'].width = 15
     ws.column_dimensions['D'].width = 15
     ws.column_dimensions['E'].width = 25
+    ws.column_dimensions['F'].width = 20
 
     output = io.BytesIO()
     wb.save(output)

@@ -6,6 +6,7 @@ class DivergenciaBase(BaseModel):
     quantidade: int
     categoria: str
     subcategoria: Optional[str] = None
+    valor_compra: Optional[float] = None
 
     @model_validator(mode='after')
     def validar_regras_negocio(self) -> 'DivergenciaBase':
@@ -17,7 +18,8 @@ class DivergenciaBase(BaseModel):
             if self.subcategoria not in ['Sobra', 'Contém no Estoque']:
                 raise ValueError('Para "Defeito", a subcategoria deve ser "Sobra" ou "Contém no Estoque".')
         else:
-            self.subcategoria = None 
+            self.subcategoria = None
+            self.valor_compra = None
             
         return self
 

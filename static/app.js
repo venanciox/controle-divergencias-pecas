@@ -7,7 +7,8 @@ const tabelaBody = document.getElementById('tabela-body');
 const emptyState = document.getElementById('empty-state');
 const btnCancelar = document.getElementById('btn-cancelar');
 const formTitle = document.getElementById('form-title');
-
+const divValor = document.getElementById('div-valor');
+const inputValor = document.getElementById('valor_compra');
 const filtroSku = document.getElementById('filtro-sku');
 const filtroCategoria = document.getElementById('filtro-categoria');
 
@@ -15,10 +16,13 @@ categoriaSelect.addEventListener('change', (e) => {
     if (e.target.value === 'Defeito') {
         divSubcategoria.classList.remove('hidden');
         subcategoriaSelect.setAttribute('required', 'required');
+        divValor.classList.remove('hidden');
     } else {
         divSubcategoria.classList.add('hidden');
         subcategoriaSelect.removeAttribute('required');
         subcategoriaSelect.value = '';
+        divValor.classList.add('hidden');
+        inputValor.value = '';
     }
 });
 
@@ -48,6 +52,8 @@ async function carregarDivergencias() {
         } else {
             emptyState.classList.add('hidden');
             data.forEach(item => {
+                const valorFormatado = item.valor_compra ? `R$ ${item.valor_compra.toFixed(2).replace('.', ',')}` : '-';
+                
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 font-mono uppercase">${item.sku}</td>
@@ -61,6 +67,7 @@ async function carregarDivergencias() {
                         </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.subcategoria || '-'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${valorFormatado}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button onclick='prepararEdicao(${JSON.stringify(item)})' class="text-indigo-600 hover:text-indigo-900 mr-3" title="Editar">
                             <i class="fa-solid fa-pen"></i>
@@ -87,7 +94,8 @@ form.addEventListener('submit', async (e) => {
         sku: document.getElementById('sku').value.toUpperCase(),
         quantidade: parseInt(document.getElementById('quantidade').value),
         categoria: categoriaSelect.value,
-        subcategoria: subcategoriaSelect.value || null
+        subcategoria: subcategoriaSelect.value || null,
+        valor_compra: categoriaSelect.value === 'Defeito' && inputValor.value ? parseFloat(inputValor.value) : null
     };
 
     try {
@@ -112,7 +120,14 @@ window.prepararEdicao = function(item) {
     document.getElementById('quantidade').value = item.quantidade;
     categoriaSelect.value = item.categoria;
     categoriaSelect.dispatchEvent(new Event('change'));
+    
     if (item.subcategoria) subcategoriaSelect.value = item.subcategoria;
+    
+    if (item.valor_compra) {
+        inputValor.value = item.valor_compra;
+    } else {
+        inputValor.value = '';
+    }
     
     formTitle.textContent = "Editar Divergência";
     btnCancelar.classList.remove('hidden');
@@ -143,7 +158,7 @@ window.exportarExcelFiltrado = function() {
     }
     
     window.location.href = url;
-}
+};
 
 btnCancelar.addEventListener('click', resetarFormulario);
 
