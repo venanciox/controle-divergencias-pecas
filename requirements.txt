@@ -3,3 +3,7 @@ uvicorn
 sqlalchemy
 pydantic
 openpyxl
+passlib
+bcrypt
+pyjwt
+python-multipart

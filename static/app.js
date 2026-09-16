@@ -1,3 +1,13 @@
+const token = localStorage.getItem('token');
+if (!token) {
+    window.location.href = '/login.html';
+}
+
+const headersPadrao = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+};
+
 const API_URL = '/api/divergencias/';
 const form = document.getElementById('divergencia-form');
 const categoriaSelect = document.getElementById('categoria');
@@ -11,6 +21,15 @@ const divValor = document.getElementById('div-valor');
 const inputValor = document.getElementById('valor_compra');
 const filtroSku = document.getElementById('filtro-sku');
 const filtroCategoria = document.getElementById('filtro-categoria');
+
+function tratarErroAuth(response) {
+    if (response.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login.html';
+        return true;
+    }
+    return false;
+}
 
 categoriaSelect.addEventListener('change', (e) => {
     if (e.target.value === 'Defeito') {
@@ -28,13 +47,17 @@ categoriaSelect.addEventListener('change', (e) => {
 
 async function atualizarDashboard() {
     try {
-        const response = await fetch('/api/estatisticas/');
+        const response = await fetch('/api/estatisticas/', { headers: headersPadrao });
+        if (tratarErroAuth(response)) return;
+        
         const stats = await response.json();
         document.getElementById('dash-total').textContent = stats.total;
         document.getElementById('dash-faltas').textContent = stats.faltas;
         document.getElementById('dash-sobras').textContent = stats.sobras;
         document.getElementById('dash-defeitos').textContent = stats.defeitos;
-    } catch (error) { console.error("Erro no dashboard:", error); }
+    } catch (error) { 
+        console.error(error); 
+    }
 }
 
 async function carregarDivergencias() {
@@ -43,7 +66,9 @@ async function carregarDivergencias() {
         if (filtroSku.value) url += `sku=${filtroSku.value.toUpperCase()}&`;
         if (filtroCategoria.value) url += `categoria=${filtroCategoria.value}`;
 
-        const response = await fetch(url);
+        const response = await fetch(url, { headers: headersPadrao });
+        if (tratarErroAuth(response)) return;
+
         const data = await response.json();
         
         tabelaBody.innerHTML = '';
@@ -81,7 +106,9 @@ async function carregarDivergencias() {
             });
         }
         atualizarDashboard();
-    } catch (error) { console.error("Erro ao carregar dados:", error); }
+    } catch (error) { 
+        console.error(error); 
+    }
 }
 
 filtroSku.addEventListener('input', carregarDivergencias);
@@ -103,15 +130,19 @@ form.addEventListener('submit', async (e) => {
         const method = id ? 'PUT' : 'POST';
         const response = await fetch(url, {
             method: method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: headersPadrao,
             body: JSON.stringify(payload)
         });
+
+        if (tratarErroAuth(response)) return;
 
         if (response.ok) {
             resetarFormulario();
             carregarDivergencias();
         }
-    } catch (error) { console.error("Erro ao salvar:", error); }
+    } catch (error) { 
+        console.error(error); 
+    }
 });
 
 window.prepararEdicao = function(item) {
@@ -122,7 +153,6 @@ window.prepararEdicao = function(item) {
     categoriaSelect.dispatchEvent(new Event('change'));
     
     if (item.subcategoria) subcategoriaSelect.value = item.subcategoria;
-    
     if (item.valor_compra) {
         inputValor.value = item.valor_compra;
     } else {
@@ -136,7 +166,11 @@ window.prepararEdicao = function(item) {
 
 window.deletarDivergencia = async function(id) {
     if (confirm("Excluir este registro permanentemente?")) {
-        await fetch(`${API_URL}${id}`, { method: 'DELETE' });
+        const response = await fetch(`${API_URL}${id}`, { 
+            method: 'DELETE',
+            headers: headersPadrao 
+        });
+        if (tratarErroAuth(response)) return;
         carregarDivergencias();
     }
 };
@@ -149,7 +183,7 @@ function resetarFormulario() {
     btnCancelar.classList.add('hidden');
 }
 
-window.exportarExcelFiltrado = function() {
+window.exportarExcelFiltrado = async function() {
     const categoriaSelecionada = document.getElementById('filtro-categoria').value;
     let url = '/api/exportar/excel';
     
@@ -157,7 +191,36 @@ window.exportarExcelFiltrado = function() {
         url += `?categoria=${categoriaSelecionada}`;
     }
     
-    window.location.href = url;
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (tratarErroAuth(response)) return;
+
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        
+        let nomeArquivo = "relatorio_divergencias.xlsx";
+        const disposition = response.headers.get('Content-Disposition');
+        if (disposition && disposition.indexOf('filename=') !== -1) {
+            const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+            if (matches != null && matches[1]) {
+                nomeArquivo = matches[1].replace(/['"]/g, '');
+            }
+        }
+
+        a.href = downloadUrl;
+        a.download = nomeArquivo;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+        console.error(error);
+    }
 };
 
 btnCancelar.addEventListener('click', resetarFormulario);
