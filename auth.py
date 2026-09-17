@@ -2,7 +2,7 @@ import bcrypt
 import jwt
 from datetime import datetime, timedelta, timezone
 
-SECRET_KEY = "***REMOVED***"
+SECRET_KEY = "chave_secreta_bexp_porsche"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 

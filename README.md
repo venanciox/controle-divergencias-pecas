@@ -24,3 +24,12 @@ Iniciar o sistema na sua máquina de trabalho é um processo direto. Certifique-
 **1. Instale as dependências:**
 ```bash
 pip install -r requirements.txt
+```
+
+**2. Inicie o servidor:**
+```bash
+uvicorn main:app --reload
+```
+
+**3. Acesse o sistema:**
+Abra o navegador e acesse `http://127.0.0.1:8000`. Durante o primeiro acesso, o sistema criará automaticamente o banco de dados e configurará o usuário administrador padrão.

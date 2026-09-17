@@ -44,7 +44,7 @@ def startup_event():
     db = SessionLocal()
     usuario_existe = db.query(models.Usuario).filter(models.Usuario.username == "caio").first()
     if not usuario_existe:
-        senha_criptografada = auth.get_password_hash("***REMOVED***")
+        senha_criptografada = auth.get_password_hash("porsche123")
         novo_usuario = models.Usuario(username="caio", hashed_password=senha_criptografada)
         db.add(novo_usuario)
         db.commit()
