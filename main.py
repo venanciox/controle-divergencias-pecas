@@ -69,6 +69,10 @@ def obter_estatisticas(db: Session = Depends(get_db), current_user: models.Usuar
 
 @app.post("/api/divergencias/", response_model=schemas.DivergenciaResponse)
 def criar_divergencia(div: schemas.DivergenciaCreate, db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
+    print(f"\n--- DADOS PRONTOS PARA O BANCO ---")
+    print(div.model_dump())
+    print(f"----------------------------------\n")
+    
     db_div = models.Divergencia(**div.model_dump())
     db.add(db_div)
     db.commit()

@@ -31,15 +31,44 @@ function tratarErroAuth(response) {
     return false;
 }
 
+const subcategoriasPorCategoria = {
+    'Falta': ['OS 17207', 'Estoque'],
+    'Sobra': ['OS 17207', 'Estoque'],
+    'Defeito': ['Avaria', 'Garantia', 'Fábrica'] 
+};
+
 categoriaSelect.addEventListener('change', (e) => {
-    if (e.target.value === 'Defeito') {
+    const categoria = e.target.value;
+    const valorAtualSub = subcategoriaSelect.value;
+    
+    subcategoriaSelect.innerHTML = '<option value="">Selecione...</option>';
+    
+    if (categoria) {
         divSubcategoria.classList.remove('hidden');
         subcategoriaSelect.setAttribute('required', 'required');
-        divValor.classList.remove('hidden');
+        
+        const opcoes = subcategoriasPorCategoria[categoria] || [];
+        opcoes.forEach(sub => {
+            const opt = document.createElement('option');
+            opt.value = sub;
+            opt.textContent = sub;
+            subcategoriaSelect.appendChild(opt);
+        });
+
+        // Mantém o valor se ele pertencer à nova categoria
+        if (opcoes.includes(valorAtualSub)) {
+            subcategoriaSelect.value = valorAtualSub;
+        }
+        
+        if (categoria === 'Defeito') {
+            divValor.classList.remove('hidden');
+        } else {
+            divValor.classList.add('hidden');
+            inputValor.value = '';
+        }
     } else {
         divSubcategoria.classList.add('hidden');
         subcategoriaSelect.removeAttribute('required');
-        subcategoriaSelect.value = '';
         divValor.classList.add('hidden');
         inputValor.value = '';
     }
@@ -117,11 +146,12 @@ filtroCategoria.addEventListener('change', carregarDivergencias);
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('divergencia-id').value;
+    
     const payload = {
         sku: document.getElementById('sku').value.toUpperCase(),
         quantidade: parseInt(document.getElementById('quantidade').value),
         categoria: categoriaSelect.value,
-        subcategoria: subcategoriaSelect.value || null,
+        subcategoria: subcategoriaSelect.value ? subcategoriaSelect.value.trim() : null,
         valor_compra: categoriaSelect.value === 'Defeito' && inputValor.value ? parseFloat(inputValor.value) : null
     };
 
@@ -139,6 +169,9 @@ form.addEventListener('submit', async (e) => {
         if (response.ok) {
             resetarFormulario();
             carregarDivergencias();
+        } else {
+            const erroServer = await response.json();
+            console.error("Erro do servidor:", erroServer);
         }
     } catch (error) { 
         console.error(error); 
@@ -151,8 +184,18 @@ window.prepararEdicao = function(item) {
     document.getElementById('quantidade').value = item.quantidade;
     categoriaSelect.value = item.categoria;
     categoriaSelect.dispatchEvent(new Event('change'));
-    
-    if (item.subcategoria) subcategoriaSelect.value = item.subcategoria;
+
+    if (item.subcategoria) {
+        const opcaoExiste = Array.from(subcategoriaSelect.options).some(opt => opt.value === item.subcategoria);
+        if (!opcaoExiste) {
+            const opt = document.createElement('option');
+            opt.value = item.subcategoria;
+            opt.textContent = item.subcategoria + " (Registro Antigo)";
+            subcategoriaSelect.appendChild(opt);
+        }
+        subcategoriaSelect.value = item.subcategoria;
+    }
+
     if (item.valor_compra) {
         inputValor.value = item.valor_compra;
     } else {
