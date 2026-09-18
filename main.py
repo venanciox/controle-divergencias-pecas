@@ -1,31 +1,58 @@
+import os
 import io
 import openpyxl
 import jwt
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from dotenv import load_dotenv
 
 import models, schemas, auth
 from database import engine, get_db, SessionLocal
 
+load_dotenv()
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Controle de Divergências")
+app = FastAPI(
+    title="Controle de Divergências",
+    docs_url=None if ENVIRONMENT == "production" else "/docs",
+    redoc_url=None if ENVIRONMENT == "production" else "/redoc"
+)
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    if ENVIRONMENT == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+def get_current_user(request: Request, db: Session = Depends(get_db)):
+    token = request.cookies.get("access_token")
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Credenciais inválidas",
-        headers={"WWW-Authenticate": "Bearer"},
+        detail="Credenciais inválidas ou sessão expirada",
     )
+    if not token:
+        raise credentials_exception
+        
+    token = token.replace("Bearer ", "")
     try:
         payload = jwt.decode(token, auth.SECRET_KEY, algorithms=[auth.ALGORITHM])
         username: str = payload.get("sub")
@@ -42,25 +69,44 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 @app.on_event("startup")
 def startup_event():
     db = SessionLocal()
-    usuario_existe = db.query(models.Usuario).filter(models.Usuario.username == "caio").first()
-    if not usuario_existe:
-        senha_criptografada = auth.get_password_hash("porsche123")
-        novo_usuario = models.Usuario(username="caio", hashed_password=senha_criptografada)
-        db.add(novo_usuario)
-        db.commit()
+    first_user = os.getenv("FIRST_SUPERUSER_USERNAME")
+    first_pass = os.getenv("FIRST_SUPERUSER_PASSWORD")
+    
+    if first_user and first_pass:
+        usuario_existe = db.query(models.Usuario).filter(models.Usuario.username == first_user).first()
+        if not usuario_existe:
+            senha_criptografada = auth.get_password_hash(first_pass)
+            novo_usuario = models.Usuario(username=first_user, hashed_password=senha_criptografada)
+            db.add(novo_usuario)
+            db.commit()
     db.close()
 
 @app.post("/api/login")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def login(request: Request, response: Response, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.Usuario).filter(models.Usuario.username == form_data.username).first()
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Usuário ou senha incorretos")
     
     access_token = auth.create_access_token(data={"sub": user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
+    
+    response.set_cookie(
+        key="access_token",
+        value=f"Bearer {access_token}",
+        httponly=True,
+        secure=(ENVIRONMENT == "production"),
+        samesite="strict",
+        max_age=auth.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    )
+    return {"message": "Login efetuado com sucesso"}
+
+@app.post("/api/logout")
+def logout(response: Response):
+    response.delete_cookie("access_token")
+    return {"message": "Sessão terminada"}
 
 @app.get("/api/estatisticas/")
-def obter_estatisticas(db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
+def obter_estatisticas(request: Request, db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
     total = db.query(models.Divergencia).count()
     faltas = db.query(models.Divergencia).filter(models.Divergencia.categoria == 'Falta').count()
     sobras = db.query(models.Divergencia).filter(models.Divergencia.categoria == 'Sobra').count()
@@ -68,11 +114,8 @@ def obter_estatisticas(db: Session = Depends(get_db), current_user: models.Usuar
     return {"total": total, "faltas": faltas, "sobras": sobras, "defeitos": defeitos}
 
 @app.post("/api/divergencias/", response_model=schemas.DivergenciaResponse)
-def criar_divergencia(div: schemas.DivergenciaCreate, db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
-    print(f"\n--- DADOS PRONTOS PARA O BANCO ---")
-    print(div.model_dump())
-    print(f"----------------------------------\n")
-    
+@limiter.limit("30/minute")
+def criar_divergencia(request: Request, div: schemas.DivergenciaCreate, db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
     db_div = models.Divergencia(**div.model_dump())
     db.add(db_div)
     db.commit()
@@ -80,16 +123,18 @@ def criar_divergencia(div: schemas.DivergenciaCreate, db: Session = Depends(get_
     return db_div
 
 @app.get("/api/divergencias/", response_model=List[schemas.DivergenciaResponse])
-def listar_divergencias(sku: Optional[str] = None, categoria: Optional[str] = None, db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
+def listar_divergencias(request: Request, skip: int = 0, limit: int = 50, sku: Optional[str] = None, categoria: Optional[str] = None, db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
+    if limit > 100: limit = 100
+    
     query = db.query(models.Divergencia)
     if sku:
         query = query.filter(models.Divergencia.sku.icontains(sku))
     if categoria:
         query = query.filter(models.Divergencia.categoria == categoria)
-    return query.all()
+    return query.offset(skip).limit(limit).all()
 
 @app.put("/api/divergencias/{div_id}", response_model=schemas.DivergenciaResponse)
-def atualizar_divergencia(div_id: int, div: schemas.DivergenciaCreate, db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
+def atualizar_divergencia(request: Request, div_id: int, div: schemas.DivergenciaCreate, db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
     db_div = db.query(models.Divergencia).filter(models.Divergencia.id == div_id).first()
     if not db_div:
         raise HTTPException(status_code=404, detail="Registro não encontrado")
@@ -100,7 +145,7 @@ def atualizar_divergencia(div_id: int, div: schemas.DivergenciaCreate, db: Sessi
     return db_div
 
 @app.delete("/api/divergencias/{div_id}")
-def deletar_divergencia(div_id: int, db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
+def deletar_divergencia(request: Request, div_id: int, db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
     db_div = db.query(models.Divergencia).filter(models.Divergencia.id == div_id).first()
     if not db_div:
         raise HTTPException(status_code=404, detail="Registro não encontrado")
@@ -109,7 +154,8 @@ def deletar_divergencia(div_id: int, db: Session = Depends(get_db), current_user
     return {"message": "Registro excluído"}
 
 @app.get("/api/exportar/excel")
-def exportar_excel(categoria: Optional[str] = None, db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
+@limiter.limit("2/minute")
+def exportar_excel(request: Request, categoria: Optional[str] = None, db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
     fuso_br = timezone(timedelta(hours=-3))
     agora = datetime.now(fuso_br)
     data_hora_br = agora.strftime("%d/%m/%Y às %H:%M:%S")
@@ -118,7 +164,8 @@ def exportar_excel(categoria: Optional[str] = None, db: Session = Depends(get_db
     query = db.query(models.Divergencia)
     if categoria:
         query = query.filter(models.Divergencia.categoria == categoria)
-    divergencias = query.all()
+        
+    divergencias = query.limit(5000).all()
     
     wb = openpyxl.Workbook()
     ws = wb.active

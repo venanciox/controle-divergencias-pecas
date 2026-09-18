@@ -40,8 +40,6 @@
             });
 
             if (response.ok) {
-                const data = await response.json();
-                localStorage.setItem('token', data.access_token);
                 window.location.href = '/';
             } else {
                 document.getElementById('error-msg').classList.remove('hidden');

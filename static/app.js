@@ -1,11 +1,5 @@
-const token = localStorage.getItem('token');
-if (!token) {
-    window.location.href = '/login.html';
-}
-
 const headersPadrao = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
+    'Content-Type': 'application/json'
 };
 
 const API_URL = '/api/divergencias/';
@@ -24,7 +18,6 @@ const filtroCategoria = document.getElementById('filtro-categoria');
 
 function tratarErroAuth(response) {
     if (response.status === 401) {
-        localStorage.removeItem('token');
         window.location.href = '/login.html';
         return true;
     }
@@ -41,7 +34,11 @@ categoriaSelect.addEventListener('change', (e) => {
     const categoria = e.target.value;
     const valorAtualSub = subcategoriaSelect.value;
     
-    subcategoriaSelect.innerHTML = '<option value="">Selecione...</option>';
+    subcategoriaSelect.textContent = '';
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = "";
+    defaultOpt.textContent = "Selecione...";
+    subcategoriaSelect.appendChild(defaultOpt);
     
     if (categoria) {
         divSubcategoria.classList.remove('hidden');
@@ -55,7 +52,6 @@ categoriaSelect.addEventListener('change', (e) => {
             subcategoriaSelect.appendChild(opt);
         });
 
-        // Mantém o valor se ele pertencer à nova categoria
         if (opcoes.includes(valorAtualSub)) {
             subcategoriaSelect.value = valorAtualSub;
         }
@@ -76,7 +72,7 @@ categoriaSelect.addEventListener('change', (e) => {
 
 async function atualizarDashboard() {
     try {
-        const response = await fetch('/api/estatisticas/', { headers: headersPadrao });
+        const response = await fetch('/api/estatisticas/', { headers: headersPadrao, credentials: 'same-origin' });
         if (tratarErroAuth(response)) return;
         
         const stats = await response.json();
@@ -92,45 +88,73 @@ async function atualizarDashboard() {
 async function carregarDivergencias() {
     try {
         let url = API_URL + '?';
-        if (filtroSku.value) url += `sku=${filtroSku.value.toUpperCase()}&`;
-        if (filtroCategoria.value) url += `categoria=${filtroCategoria.value}`;
+        if (filtroSku.value) url += `sku=${encodeURIComponent(filtroSku.value.toUpperCase())}&`;
+        if (filtroCategoria.value) url += `categoria=${encodeURIComponent(filtroCategoria.value)}`;
 
-        const response = await fetch(url, { headers: headersPadrao });
+        const response = await fetch(url, { headers: headersPadrao, credentials: 'same-origin' });
         if (tratarErroAuth(response)) return;
 
         const data = await response.json();
         
-        tabelaBody.innerHTML = '';
+        tabelaBody.textContent = '';
         if (data.length === 0) {
             emptyState.classList.remove('hidden');
         } else {
             emptyState.classList.add('hidden');
             data.forEach(item => {
-                const valorFormatado = item.valor_compra ? `R$ ${item.valor_compra.toFixed(2).replace('.', ',')}` : '-';
-                
                 const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 font-mono uppercase">${item.sku}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.quantidade}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm">
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                            ${item.categoria === 'Falta' ? 'bg-yellow-100 text-yellow-800' : 
-                              item.categoria === 'Sobra' ? 'bg-blue-100 text-blue-800' : 
-                              'bg-red-100 text-red-800'}">
-                            ${item.categoria}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.subcategoria || '-'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${valorFormatado}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button onclick='prepararEdicao(${JSON.stringify(item)})' class="text-indigo-600 hover:text-indigo-900 mr-3" title="Editar">
-                            <i class="fa-solid fa-pen"></i>
-                        </button>
-                        <button onclick="deletarDivergencia(${item.id})" class="text-red-600 hover:text-red-900" title="Excluir">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
-                    </td>
-                `;
+
+                const tdSku = document.createElement('td');
+                tdSku.className = "px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 font-mono uppercase";
+                tdSku.textContent = item.sku;
+                tr.appendChild(tdSku);
+
+                const tdQtd = document.createElement('td');
+                tdQtd.className = "px-6 py-4 whitespace-nowrap text-sm text-gray-500";
+                tdQtd.textContent = item.quantidade;
+                tr.appendChild(tdQtd);
+
+                const tdCat = document.createElement('td');
+                tdCat.className = "px-6 py-4 whitespace-nowrap text-sm";
+                const spanCat = document.createElement('span');
+                const cores = {
+                    'Falta': 'bg-yellow-100 text-yellow-800',
+                    'Sobra': 'bg-blue-100 text-blue-800',
+                    'Defeito': 'bg-red-100 text-red-800'
+                };
+                spanCat.className = `px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${cores[item.categoria] || ''}`;
+                spanCat.textContent = item.categoria;
+                tdCat.appendChild(spanCat);
+                tr.appendChild(tdCat);
+
+                const tdSub = document.createElement('td');
+                tdSub.className = "px-6 py-4 whitespace-nowrap text-sm text-gray-500";
+                tdSub.textContent = item.subcategoria || '-';
+                tr.appendChild(tdSub);
+
+                const tdVal = document.createElement('td');
+                tdVal.className = "px-6 py-4 whitespace-nowrap text-sm text-gray-500";
+                tdVal.textContent = item.valor_compra ? `R$ ${item.valor_compra.toFixed(2).replace('.', ',')}` : '-';
+                tr.appendChild(tdVal);
+
+                const tdAcoes = document.createElement('td');
+                tdAcoes.className = "px-6 py-4 whitespace-nowrap text-right text-sm font-medium";
+                
+                const btnEdit = document.createElement('button');
+                btnEdit.className = "text-indigo-600 hover:text-indigo-900 mr-3";
+                btnEdit.title = "Editar";
+                btnEdit.innerHTML = '<i class="fa-solid fa-pen"></i>';
+                btnEdit.onclick = () => prepararEdicao(item);
+                tdAcoes.appendChild(btnEdit);
+
+                const btnDel = document.createElement('button');
+                btnDel.className = "text-red-600 hover:text-red-900";
+                btnDel.title = "Excluir";
+                btnDel.innerHTML = '<i class="fa-solid fa-trash"></i>';
+                btnDel.onclick = () => deletarDivergencia(item.id);
+                tdAcoes.appendChild(btnDel);
+
+                tr.appendChild(tdAcoes);
                 tabelaBody.appendChild(tr);
             });
         }
@@ -161,6 +185,7 @@ form.addEventListener('submit', async (e) => {
         const response = await fetch(url, {
             method: method,
             headers: headersPadrao,
+            credentials: 'same-origin',
             body: JSON.stringify(payload)
         });
 
@@ -171,6 +196,7 @@ form.addEventListener('submit', async (e) => {
             carregarDivergencias();
         } else {
             const erroServer = await response.json();
+            alert("Erro: Verifique se os dados estão corretos.");
             console.error("Erro do servidor:", erroServer);
         }
     } catch (error) { 
@@ -211,7 +237,8 @@ window.deletarDivergencia = async function(id) {
     if (confirm("Excluir este registro permanentemente?")) {
         const response = await fetch(`${API_URL}${id}`, { 
             method: 'DELETE',
-            headers: headersPadrao 
+            headers: headersPadrao,
+            credentials: 'same-origin'
         });
         if (tratarErroAuth(response)) return;
         carregarDivergencias();
@@ -231,13 +258,13 @@ window.exportarExcelFiltrado = async function() {
     let url = '/api/exportar/excel';
     
     if (categoriaSelecionada) {
-        url += `?categoria=${categoriaSelecionada}`;
+        url += `?categoria=${encodeURIComponent(categoriaSelecionada)}`;
     }
     
     try {
         const response = await fetch(url, {
             method: 'GET',
-            headers: { 'Authorization': `Bearer ${token}` }
+            credentials: 'same-origin'
         });
         
         if (tratarErroAuth(response)) return;
@@ -267,5 +294,4 @@ window.exportarExcelFiltrado = async function() {
 };
 
 btnCancelar.addEventListener('click', resetarFormulario);
-
 carregarDivergencias();

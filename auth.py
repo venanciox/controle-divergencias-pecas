@@ -1,8 +1,19 @@
+import os
 import bcrypt
 import jwt
 from datetime import datetime, timedelta, timezone
+from dotenv import load_dotenv
 
-SECRET_KEY = "chave_secreta_bexp_porsche"
+load_dotenv()
+
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
+if not SECRET_KEY and ENVIRONMENT == "production":
+    raise RuntimeError("FALHA CRÍTICA: JWT_SECRET_KEY não configurada em ambiente de produção!")
+elif not SECRET_KEY:
+    SECRET_KEY = "chave_temporaria_desenvolvimento_local"
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
