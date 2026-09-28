@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field, model_validator
 from typing import Optional, Literal
 
 class DivergenciaBase(BaseModel):
-    sku: str = Field(..., min_length=2, max_length=50, pattern=r'^[a-zA-Z0-9-_]+$')
+    sku: str = Field(..., min_length=2, max_length=50, pattern=r'^[a-zA-Z0-9-_ ]+$')
     quantidade: int = Field(..., ge=1, le=10000)
     categoria: Literal['Falta', 'Sobra', 'Defeito']
     subcategoria: str = Field(..., min_length=2, max_length=100)

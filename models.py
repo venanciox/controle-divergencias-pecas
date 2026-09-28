@@ -15,4 +15,4 @@ class Divergencia(Base):
     quantidade = Column(Integer, nullable=False)
     categoria = Column(String(50), nullable=False)
     subcategoria = Column(String(100), nullable=False)
-    valor_compra = Column(Float, nullable=False)
+    valor_compra = Column(Float, nullable=True)
