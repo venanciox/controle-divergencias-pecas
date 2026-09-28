@@ -11,13 +11,13 @@ class DivergenciaBase(BaseModel):
 class DivergenciaCreate(DivergenciaBase):
     @model_validator(mode='after')
     def validar_regras_negocio(self) -> 'DivergenciaCreate':
-        if self.categoria != 'Defeito':
+        if self.categoria == 'Sobra':
             self.valor_compra = None
             
         regras = {
             'Falta': ['OS 17207', 'Estoque'],
             'Sobra': ['OS 17207', 'Estoque'],
-            'Defeito': ['Avaria', 'Garantia', 'Fábrica'] 
+            'Defeito': ['Contém no Estoque', 'Sobra'] 
         }
         
         if self.categoria in regras and self.subcategoria not in regras[self.categoria]:

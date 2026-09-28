@@ -188,7 +188,7 @@ def exportar_excel(request: Request, categoria: Optional[str] = None, db: Sessio
     title_cell.fill = PatternFill(start_color="1A1A1A", end_color="1A1A1A", fill_type="solid")
     ws.row_dimensions[1].height = 30
 
-    headers = ["ID", "SKU (Part Number)", "Quantidade", "Categoria", "Subcategoria", "Valor Compra"]
+    headers = ["ID", "SKU (Part Number)", "Quantidade", "Categoria", "Subcategoria", "Valor Total (Qtd x Valor)"]
     for col_num, header in enumerate(headers, 1):
         cell = ws.cell(row=2, column=col_num)
         cell.value = header
@@ -206,7 +206,8 @@ def exportar_excel(request: Request, categoria: Optional[str] = None, db: Sessio
         ws.cell(row=row_num, column=4, value=d.categoria).border = borda
         ws.cell(row=row_num, column=5, value=d.subcategoria or '-').border = borda
         
-        valor_str = f"R$ {d.valor_compra:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if d.valor_compra else "-"
+        valor_total_item = (d.valor_compra * d.quantidade) if d.valor_compra else None
+        valor_str = f"R$ {valor_total_item:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_total_item else "-"
         ws.cell(row=row_num, column=6, value=valor_str).border = borda
         
         ws.cell(row=row_num, column=1).alignment = Alignment(horizontal="center", vertical="center")
@@ -214,21 +215,35 @@ def exportar_excel(request: Request, categoria: Optional[str] = None, db: Sessio
         ws.cell(row=row_num, column=4).alignment = Alignment(horizontal="center", vertical="center")
         ws.cell(row=row_num, column=6).alignment = Alignment(horizontal="center", vertical="center")
 
-    ultima_linha = ws.max_row + 1 if divergencias else 3
+    total_valor = sum((d.valor_compra * d.quantidade) for d in divergencias if d.valor_compra)
+    linha_total = ws.max_row + 1 if divergencias else 3
     
-    ws.merge_cells(start_row=ultima_linha, start_column=1, end_row=ultima_linha, end_column=6)
-    rodape_cell = ws.cell(row=ultima_linha, column=1)
+    ws.merge_cells(start_row=linha_total, start_column=1, end_row=linha_total, end_column=5)
+    label_total = ws.cell(row=linha_total, column=1, value="TOTAL DOS VALORES DE COMPRA:")
+    label_total.font = Font(bold=True)
+    label_total.alignment = Alignment(horizontal="right", vertical="center")
+    
+    total_str = f"R$ {total_valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    cell_total = ws.cell(row=linha_total, column=6, value=total_str)
+    cell_total.font = Font(bold=True)
+    cell_total.border = borda
+    cell_total.alignment = Alignment(horizontal="center", vertical="center")
+
+    linha_rodape = linha_total + 1
+    
+    ws.merge_cells(start_row=linha_rodape, start_column=1, end_row=linha_rodape, end_column=6)
+    rodape_cell = ws.cell(row=linha_rodape, column=1)
     rodape_cell.value = f"Documento gerado em: {data_hora_br}"
     rodape_cell.font = Font(italic=True, size=10, color="555555")
     rodape_cell.alignment = Alignment(horizontal="right", vertical="center")
-    ws.row_dimensions[ultima_linha].height = 25
+    ws.row_dimensions[linha_rodape].height = 25
 
     ws.column_dimensions['A'].width = 8
     ws.column_dimensions['B'].width = 25
     ws.column_dimensions['C'].width = 15
     ws.column_dimensions['D'].width = 15
     ws.column_dimensions['E'].width = 25
-    ws.column_dimensions['F'].width = 20
+    ws.column_dimensions['F'].width = 25
 
     output = io.BytesIO()
     wb.save(output)
@@ -242,5 +257,5 @@ def exportar_excel(request: Request, categoria: Optional[str] = None, db: Sessio
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
         headers={"Content-Disposition": f"attachment; filename={nome_arquivo}"}
     )
-
+    
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

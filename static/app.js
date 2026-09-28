@@ -27,7 +27,7 @@ function tratarErroAuth(response) {
 const subcategoriasPorCategoria = {
     'Falta': ['OS 17207', 'Estoque'],
     'Sobra': ['OS 17207', 'Estoque'],
-    'Defeito': ['Avaria', 'Garantia', 'Fábrica'] 
+    'Defeito': ['Contém no Estoque', 'Sobra'] 
 };
 
 categoriaSelect.addEventListener('change', (e) => {
@@ -56,7 +56,7 @@ categoriaSelect.addEventListener('change', (e) => {
             subcategoriaSelect.value = valorAtualSub;
         }
         
-        if (categoria === 'Defeito') {
+        if (categoria === 'Defeito' || categoria === 'Falta') {
             divValor.classList.remove('hidden');
         } else {
             divValor.classList.add('hidden');
@@ -176,7 +176,9 @@ form.addEventListener('submit', async (e) => {
         quantidade: parseInt(document.getElementById('quantidade').value),
         categoria: categoriaSelect.value,
         subcategoria: subcategoriaSelect.value ? subcategoriaSelect.value.trim() : null,
-        valor_compra: categoriaSelect.value === 'Defeito' && inputValor.value ? parseFloat(inputValor.value) : null
+        valor_compra: (categoriaSelect.value === 'Defeito' || categoriaSelect.value === 'Falta') && inputValor.value 
+                        ? parseFloat(inputValor.value.replace(',', '.')) 
+                        : null
     };
 
     try {
